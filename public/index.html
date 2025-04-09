@@ -1,21 +1,102 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <title>CCTV 위치 검색</title>
-  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=★여기에_카카오_API_KEY★&libraries=services"></script>
+  <meta charset="UTF-8" />
+  <title>📸 CCTV 위치 검색</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=ed21e980f5b7d78d34d63434e6c5a1d9&libraries=services,clusterer,drawing"></script>
   <style>
-    body { font-family: sans-serif; margin: 20px; }
-    #map { width: 100%; height: 500px; margin-top: 20px; }
-    #search-box { display: flex; gap: 10px; }
-    input { padding: 8px; width: 300px; }
-    button { padding: 8px 12px; cursor: pointer; }
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f9fafb;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    header {
+      width: 100%;
+      padding: 20px;
+      background-color: #2f80ed;
+      color: white;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .search-container {
+      margin-top: 30px;
+      padding: 20px 30px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    input {
+      padding: 10px;
+      font-size: 16px;
+      width: 300px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      transition: 0.3s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #2f80ed;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #2f80ed;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+
+    button:hover {
+      background-color: #2563eb;
+    }
+
+    #map {
+      width: 90%;
+      height: 550px;
+      margin: 40px auto;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    @media (max-width: 500px) {
+      input {
+        width: 100%;
+      }
+
+      .search-container {
+        flex-direction: column;
+        width: 90%;
+      }
+
+      #map {
+        width: 95%;
+        height: 400px;
+      }
+    }
   </style>
 </head>
 <body>
-  <h2>📸 CCTV 위치 검색</h2>
 
-  <div id="search-box">
+  <header>CCTV 위치 검색</header>
+
+  <div class="search-container">
     <input type="text" id="searchInput" placeholder="주소 키워드 입력 (예: 독산, 시흥대로 등)" />
     <button onclick="searchCCTV()">검색</button>
   </div>
@@ -23,8 +104,7 @@
   <div id="map"></div>
 
   <script>
-    const API_BASE = 'https://cctv-api-server.onrender.com'; // 백엔드 API 주소
-
+    const API_BASE = 'https://cctv-api-server.onrender.com'; // ← Render 백엔드 주소
     let map;
 
     function initMap() {
@@ -49,25 +129,48 @@
           return;
         }
 
-        // 지도 초기화
         map.setLevel(5);
         map.setCenter(new kakao.maps.LatLng(data[0].lat, data[0].lot));
 
-        // 기존 마커 제거
-        if (window.markers) {
-          window.markers.forEach(m => m.setMap(null));
-        }
+        if (window.markers) window.markers.forEach(m => m.setMap(null));
+        if (window.circles) window.circles.forEach(c => c.setMap(null));
         window.markers = [];
+        window.circles = [];
 
-        data.forEach(item => {
-          const position = new kakao.maps.LatLng(item.lat, item.lot);
+        const locations = data.map(item => ({
+          lat: item.lat,
+          lot: item.lot,
+          address: item.address
+        }));
+
+        // 밀도 계산 및 시각화
+        locations.forEach((center, i) => {
+          let count = 0;
+          const radius = 100; // 반경 100m
+
+          locations.forEach((other) => {
+            const d = getDistance(center.lat, center.lot, other.lat, other.lot);
+            if (d <= radius) count++;
+          });
+
+          // 원 표시
+          const circle = new kakao.maps.Circle({
+            center: new kakao.maps.LatLng(center.lat, center.lot),
+            radius: radius,
+            strokeWeight: 0,
+            fillColor: getColorByCount(count),
+            fillOpacity: 0.5,
+            map: map
+          });
+
+          // 마커 표시
           const marker = new kakao.maps.Marker({
-            position,
+            position: new kakao.maps.LatLng(center.lat, center.lot),
             map
           });
 
           const infoWindow = new kakao.maps.InfoWindow({
-            content: `<div style="padding:5px;">${item.address}</div>`
+            content: `<div style="padding:5px;">${center.address}</div>`
           });
 
           kakao.maps.event.addListener(marker, 'click', () => {
@@ -75,11 +178,36 @@
           });
 
           window.markers.push(marker);
+          window.circles.push(circle);
         });
+
       } catch (err) {
         alert('API 요청 실패!');
         console.error(err);
       }
+    }
+
+    // 거리 계산 함수 (Haversine)
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+      const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    // 밀도별 색상 결정
+    function getColorByCount(count) {
+      if (count >= 10) return 'rgba(255, 0, 0, 0.3)';       // 붉은색
+      if (count >= 6)  return 'rgba(255, 140, 0, 0.3)';     // 주황
+      if (count >= 3)  return 'rgba(0, 153, 255, 0.3)';     // 파랑
+      return 'rgba(0, 200, 100, 0.3)';                      // 연초록
     }
 
     window.onload = initMap;
