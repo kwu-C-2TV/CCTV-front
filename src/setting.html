@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CCTV 설정</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 0;
+            background-color: #f2f2f2;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .card {
+            width: 360px;
+            background: #fff;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            padding: 16px;
+        }
+
+        .header {
+            background: #4086f4;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            padding: 10px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .section {
+            margin-bottom: 16px;
+        }
+
+        .label {
+            font-weight: bold;
+            font-size: 14px;
+            margin-bottom: 8px;
+            text-align: left;
+        }
+
+        .risk-box .label {
+            text-align: center;
+        }
+
+        .box {
+            background: #f8f8f8;
+            border-radius: 12px;
+            padding: 12px;
+            margin-top: 6px;
+            border: 1.5px solid #d0d0d0;
+            position: relative;
+        }
+
+        .risk-box {
+            border: 2px solid #c5c5c5;
+        }
+
+        .risk-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+
+        .dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .green {
+            background: #6cd38e;
+        }
+
+        .lightgreen {
+            background: #9df29d;
+        }
+
+        .yellow {
+            background: #f9ec8d;
+        }
+
+        .orange {
+            background: #f8b878;
+        }
+
+        .red {
+            background: #f26d6d;
+        }
+
+        .btn {
+            width: 100%;
+            background: #eee;
+            padding: 10px;
+            border-radius: 10px;
+            border: none;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 12px;
+        }
+
+        .slider-group {
+            position: relative;
+            flex: 1;
+            padding-top: 36px;
+        }
+
+        .icon-container {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            pointer-events: none;
+        }
+
+        .icon-img {
+            transition: width 0.2s ease;
+        }
+
+        .slider {
+            width: 100%;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: #ccc;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #adcaf8;
+            cursor: pointer;
+        }
+
+        .bottom-row {
+            margin-top: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle {
+            width: 36px;
+            height: 20px;
+            border-radius: 10px;
+            background-color: #ccc;
+            position: relative;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .toggle::after {
+            content: "";
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background-color: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: 0.2s;
+        }
+
+        .toggle.active {
+            background-color: #adcaf8;
+        }
+
+        .toggle.active::after {
+            transform: translateX(16px);
+        }
+
+        .value-text {
+            font-size: 13px;
+            color: #333;
+        }
+
+        .popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 999;
+        }
+
+        .popup {
+            background: white;
+            padding: 20px;
+            border-radius: 16px;
+            text-align: center;
+            width: 300px;
+            position: relative;
+        }
+
+        .popup-title {
+            font-weight: bold;
+            margin-bottom: 14px;
+            font-size: 15px;
+        }
+
+        .circle-group {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .circle {
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+        }
+
+        .circle.selected::after {
+            content: '✔';
+        }
+
+        .circle.red {
+            background: #f26d6d;
+        }
+
+        .circle.orange {
+            background: #f8b878;
+        }
+
+        .circle.yellow {
+            background: #f9ec8d;
+            color: black;
+        }
+
+        .circle.lightgreen {
+            background: #9df29d;
+            color: black;
+        }
+
+        .circle.green {
+            background: #6cd38e;
+            color: black;
+        }
+
+        .close-btn {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #888;
+        }
+
+        .close-btn:hover {
+            color: #000;
+        }
+
+        .header {
+            background: #85b4ff;
+            color: white;
+            font-size: 16px;
+            font-weight: 600;
+            text-align: center;
+            padding: 10px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            position: relative;
+        }
+
+        .exit-header {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            font-weight: bold;
+            color: rgb(0, 0, 0);
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .exit-header:hover {
+            color: #adcaf8;
+        }
+
+        .heatmap-dot.red {
+            background: #f26d6d;
+        }
+
+        .heatmap-dot.orange {
+            background: #f8b878;
+        }
+
+        .heatmap-dot.yellow {
+            background: #f9ec8d;
+        }
+
+        .heatmap-dot.lightgreen {
+            background: #9df29d;
+        }
+
+        .heatmap-dot.green {
+            background: #6cd38e;
+        }
+
+        .heatmap-dot {
+            width: 30px;
+            height: 30px;
+            margin: 10px 6px 0 0;
+            /* ⬅ 여기 margin-top: 10px 추가됨 */
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="header">CCTV 위치 기반 안전 정보</div>
+        <button class="exit-header" onclick="history.back()">×</button>
+
+        <!-- 위험도 기준 -->
+        <div class="section">
+            <div class="box risk-box">
+                <div class="label">위험도 별 점수 기준</div>
+                <div class="risk-row">
+                    <div class="dot green"></div> 점수: 80 이상
+                </div>
+                <div class="risk-row">
+                    <div class="dot lightgreen"></div> 점수: 60 ~ 79 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot yellow"></div> 점수: 40 ~ 59 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot orange"></div> 점수: 20 ~ 39 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot red"></div> 점수: 0 ~ 19 점
+                </div>
+            </div>
+            <button class="btn">위험 알림 받기</button>
+        </div>
+
+        <!-- 아이콘 설정 -->
+        <div class="section">
+            <div class="box">
+                <div class="label">아이콘 설정</div>
+                <div class="slider-group">
+                    <div class="icon-container">
+                        <img id="icon1" class="icon-img" src="https://cdn-icons-png.flaticon.com/512/684/684908.png"
+                            alt="icon1" style="width: 30px;" />
+                        <img id="icon2" class="icon-img" src="https://cdn-icons-png.flaticon.com/512/684/684908.png"
+                            alt="icon2" style="width: 30px;" />
+                    </div>
+                    <input type="range" id="iconSlider" class="slider" min="25" max="40" value="30">
+                </div>
+                <div class="bottom-row">
+                    <span id="iconValue" class="value-text">30px</span>
+                    <div id="iconToggle" class="toggle active"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- 히트맵 색상과 투명도 조절 -->
+        <div class="box">
+            <div class="label" style="text-align:left;">히트맵 투명도 설정</div>
+            <div style="display: flex; justify-content: center; gap: 6px; margin-top: 0.1px; margin-bottom: 0.1px;">
+                <div class="heatmap-dot red" id="dotRed"></div>
+                <div class="heatmap-dot orange" id="dotOrange"></div>
+                <div class="heatmap-dot yellow" id="dotYellow"></div>
+                <div class="heatmap-dot lightgreen" id="dotLightGreen"></div>
+                <div class="heatmap-dot green" id="dotGreen"></div>
+            </div>
+            <div class="slider-group">
+                <input type="range" id="heatSlider" class="slider" min="0" max="100" value="50">
+            </div>
+            <div class="bottom-row">
+                <span id="heatValue" class="value-text">50%</span>
+                <div id="heatToggle" class="toggle active"></div>
+            </div>
+        </div>
+
+
+
+        <!-- 팝업 HTML -->
+        <div id="popupOverlay" class="popup-overlay">
+            <div class="popup">
+                <button class="close-btn" onclick="closePopup()">×</button>
+                <div class="popup-title">위험 알림 수신 레벨 선택</div>
+                <div class="circle-group">
+                    <div class="circle red" data-risk="red"></div>
+                    <div class="circle orange" data-risk="orange"></div>
+                    <div class="circle yellow" data-risk="yellow"></div>
+                    <div class="circle lightgreen" data-risk="lightgreen"></div>
+                    <div class="circle green" data-risk="green"></div>
+                </div>
+                <button class="btn" onclick="closePopup()">확인</button>
+            </div>
+        </div>
+
+
+        <script>
+            const iconSlider = document.getElementById('iconSlider');
+            const icon1 = document.getElementById('icon1');
+            const icon2 = document.getElementById('icon2');
+            const iconValue = document.getElementById('iconValue');
+            const iconToggle = document.getElementById('iconToggle');
+
+            const heatSlider = document.getElementById('heatSlider');
+            const heatValue = document.getElementById('heatValue');
+            const heatToggle = document.getElementById('heatToggle');
+
+            // 초기값 불러오기
+            window.addEventListener('DOMContentLoaded', () => {
+                const savedIcon = localStorage.getItem('iconSize');
+                const savedHeat = localStorage.getItem('heatOpacity');
+                const iconToggled = localStorage.getItem('iconToggle') === 'true';
+                const heatToggled = localStorage.getItem('heatToggle') === 'true';
+
+                if (savedIcon) {
+                    iconSlider.value = savedIcon;
+                    icon1.style.width = `${savedIcon}px`;
+                    icon2.style.width = `${savedIcon}px`;
+                    iconValue.textContent = `${savedIcon}px`;
+                }
+                if (savedHeat) {
+                    heatSlider.value = savedHeat;
+                    heatValue.textContent = `${savedHeat}%`;
+                }
+
+                if (!iconToggled) iconToggle.classList.remove('active');
+                if (!heatToggled) heatToggle.classList.remove('active');
+            });
+
+            iconSlider.addEventListener('input', () => {
+                const size = iconSlider.value;
+                icon1.style.width = `${size}px`;
+                icon2.style.width = `${size}px`;
+                iconValue.textContent = `${size}px`;
+                localStorage.setItem('iconSize', size);
+            });
+
+            heatSlider.addEventListener('input', () => {
+                heatValue.textContent = `${heatSlider.value}%`;
+                localStorage.setItem('heatOpacity', heatSlider.value);
+            });
+
+            [iconToggle, heatToggle].forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    toggle.classList.toggle('active');
+                    localStorage.setItem(
+                        toggle.id === 'iconToggle' ? 'iconToggle' : 'heatToggle',
+                        toggle.classList.contains('active')
+                    );
+                });
+            });
+
+            const openPopupBtn = document.querySelectorAll(".btn")[0];
+            const popupOverlay = document.getElementById("popupOverlay");
+            const circles = document.querySelectorAll('.circle');
+
+            // 팝업 열기
+            openPopupBtn.addEventListener('click', () => {
+                popupOverlay.style.display = 'flex';
+                const saved = localStorage.getItem('selectedRiskLevel');
+                if (saved) {
+                    circles.forEach(c => {
+                        c.classList.toggle('selected', c.dataset.risk === saved);
+                    });
+                } else {
+                    circles.forEach(c => c.classList.remove('selected'));
+                }
+            });
+
+            // 팝업 닫기 함수
+            function closePopup() {
+                popupOverlay.style.display = 'none';
+            }
+
+            // 선택/해제 로직 + 저장
+            circles.forEach(circle => {
+                circle.addEventListener('click', () => {
+                    if (circle.classList.contains('selected')) {
+                        circle.classList.remove('selected');
+                        localStorage.removeItem('selectedRiskLevel');
+                    } else {
+                        circles.forEach(c => c.classList.remove('selected'));
+                        circle.classList.add('selected');
+                        localStorage.setItem('selectedRiskLevel', circle.dataset.risk);
+                    }
+                });
+            });
+
+            const heatDots = [
+                document.getElementById('dotRed'),
+                document.getElementById('dotOrange'),
+                document.getElementById('dotYellow'),
+                document.getElementById('dotLightGreen'),
+                document.getElementById('dotGreen')
+            ];
+
+            function updateHeatDotOpacity(val) {
+                const opacity = val / 100;
+                heatDots.forEach(dot => {
+                    dot.style.opacity = opacity;
+                });
+            }
+
+            // 슬라이더 변경 시 투명도 적용
+            document.getElementById('heatSlider').addEventListener('input', (e) => {
+                const value = e.target.value;
+                document.getElementById('heatValue').textContent = `${value}%`;
+                updateHeatDotOpacity(value);
+                localStorage.setItem('heatOpacity', value);
+            });
+
+            // 초기 로딩 시 적용
+            window.addEventListener('DOMContentLoaded', () => {
+                const saved = localStorage.getItem('heatOpacity') || '50';
+                document.getElementById('heatSlider').value = saved;
+                document.getElementById('heatValue').textContent = `${saved}%`;
+                updateHeatDotOpacity(saved);
+            });
+
+        </script>
+</body>
+
+</html>
