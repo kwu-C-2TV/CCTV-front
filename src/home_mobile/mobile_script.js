@@ -3,6 +3,8 @@ const API_BASE = 'https://cctv-api-server.onrender.com';
 let map, radius = 100;
 let markers = [], infoWindows = [], circles = [], userCircle = null;
 let currentUserLat = null, currentUserLon = null;
+let cctvVisible = true; // CCTV 마커 표시 여부
+let lampVisible = true; // CCTV 마커 표시 여부
 
 // 📌 거리 계산 함수 (Haversine)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -109,15 +111,15 @@ function drawSafetyDonut(score) {
   });
 
   // 점수 텍스트
-  document.getElementById('safetyScoreLabel').innerText = `안전 점수: ${score}점`;
+  document.getElementById('safetyScoreLabel').innerText = `${score}점`;
 
-  const riskLevelThreshold = {
-    red: 20,
-    orange: 40,
-    yellow: 60,
-    lightgreen: 80,
-    green: 101
-  };
+  // 점수에 따라 score-badge 배경색 변경
+  const scoreBadge = document.getElementById('safetyScoreLabel');
+  if (score >= 80) scoreBadge.style.backgroundColor = '#6cd38e'; // 초록
+  else if (score >= 60) scoreBadge.style.backgroundColor = '#9df29d'; // 연초록
+  else if (score >= 40) scoreBadge.style.backgroundColor = '#f9ec8d'; // 노랑
+  else if (score >= 20) scoreBadge.style.backgroundColor = '#f8b878'; // 주황
+  else scoreBadge.style.backgroundColor = '#f26d6d'; // 빨강
 
   const selectedLevel = localStorage.getItem('selectedRiskLevel');
   if (selectedLevel) {
@@ -215,7 +217,6 @@ function updateNearbyFacilities(lat, lon) {
     });
 
 
-
     markers.push(marker);
 
     const infoWindow = new naver.maps.InfoWindow({
@@ -223,9 +224,12 @@ function updateNearbyFacilities(lat, lon) {
     });
     infoWindows.push(infoWindow);
 
-    marker.addListener('click', () => {
+    marker.addListener('mouseover', () => {
       infoWindows.forEach(iw => iw.close());
       infoWindow.open(map, marker);
+    });
+    marker.addListener('mouseout', () => {
+      infoWindow.close();
     });
 
     const item = document.createElement('div');
@@ -303,7 +307,6 @@ function searchByCurrentLocation() {
   });
 }
 
-
 window.onload = () => {
   // ✅ 초기 상태 설정 (기본값 저장)
   if (localStorage.getItem('iconToggle') === null) {
@@ -311,7 +314,7 @@ window.onload = () => {
   }
 
   const iconToggle = localStorage.getItem('iconToggle') === 'true';
-  const tabButtons = document.querySelectorAll('.tab-btn');
+  const tabButtons = document.querySelectorAll('.circle-btn');
   const [heatBtn, lightBtn, cctvBtn] = tabButtons;
 
   // ✅ 초기 스타일 세팅
@@ -347,3 +350,11 @@ window.onload = () => {
   document.getElementById('radiusInput').addEventListener('input', updateRadiusLabel);
 };
 
+
+//토글
+function toggleCCTVMarkers() {
+  cctvVisible = !cctvVisible;
+  markers.forEach(marker => {
+    marker.setMap(cctvVisible ? map : null);
+  });
+}
