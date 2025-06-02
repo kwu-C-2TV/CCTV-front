@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>CCTV 위치 검색</title>
+  <meta name="viewport" content="1440" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Naver Maps API -->
+  <script
+    src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f0a5l6s8em&submodules=geocoder,visualization,geometry"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="./style.css" />
+</head>
+
+<body>
+
+  <div class="main-box">
+    <div class="header-bar">
+      <div class="header-title">CCTV 위치 기반 안전 정보</div>
+      <button class="settings" onclick="location.href='../setting/setting.html'">⚙️</button>
+      <button class="mobile" onclick="location.href='../home_mobile/home_mobile.html'">📱</button>
+    </div>
+
+    <div class="controls">
+      <input type="text" id="searchInput" placeholder="주소 키워드 입력 (예: 시흥대로)">
+      <button id="searchBtn">검색</button>
+      <button id="showAllStreetlampsBtn"> 가로등 전체 보기</button>
+
+      <div class="range-container">
+        <label>반경: <span id="radiusLabel">100</span>m</label>
+        <input type="range" min="50" max="300" step="10" value="100" id="radiusInput" />
+      </div>
+
+    </div>
+
+    <div id="locationInfo">
+      <p id="currentAddress"> 현위치 주소: 불러오는 중...</p>
+    </div>
+
+    <div id="chart-section">
+      <div>
+        <h4>📊 주변 시설 개수</h4>
+        <canvas id="facilityChart" width="300" height="200"></canvas>
+      </div>
+      <div>
+        <h4>🛡 안전 점수</h4>
+        <canvas id="safetyDonut" width="200" height="200"></canvas>
+        <p id="safetyScoreLabel" style="font-weight: bold; margin-top: 10px;"></p>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn">히트맵</button>
+      <button class="tab-btn">가로등</button>
+      <button class="tab-btn active">CCTV</button>
+    </div>
+
+
+    <div id="map-wrapper">
+      <div id="map"></div>
+      <div id="list">
+        <h3>CCTV 리스트</h3>
+        <div id="resultList"></div>
+      </div>
+    </div>
+
+    <div id="riskAlertPopup" class="popup-overlay" style="display: none;">
+      <div class="popup">
+        <button class="close-btn" onclick="closeRiskAlert()">×</button>
+        <div class="popup-title">⚠️ 위험 지역 안내</div>
+        <div id="riskAlertMessage" style="margin: 10px 0; text-align: center;"></div>
+        <button class="btn" onclick="closeRiskAlert()">확인</button>
+      </div>
+    </div>
+
+    <!-- script.js 연결 -->
+    <script src="./script.js"></script>
+  </body>
+  <script>
+    let mapInstance;
+    let currentLat = null;
+    let currentLon = null;
+    let currentRadius = 100;
+
+    function initTabSync(map) {
+      mapInstance = map;
+
+      document.querySelectorAll('.tab-btn').forEach((btn, index) => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          currentRadius = document.getElementById('radiusInput').value;
+
+          if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition((position) => {
+              currentLat = position.coords.latitude;
+              currentLon = position.coords.longitude;
+
+              if (index === 1) {
+                // 가로등 탭 클릭 시
+                searchStreetlampsByCurrentLocation(currentLat, currentLon);
+                document.querySelector('#list h3').innerText = "가로등 리스트";
+              } else if (index === 2) {
+                // CCTV 탭 클릭 시
+                searchByCurrentLocation();
+                document.querySelector('#list h3').innerText = "CCTV 리스트";
+              }
+            });
+          } else {
+            alert("위치 정보를 가져올 수 없습니다.");
+          }
+        });
+      });
+    }
+
+    // 반경 조정
+    document.getElementById("radiusInput").addEventListener("input", function () {
+      document.getElementById("radiusLabel").textContent = this.value;
+      currentRadius = this.value;
+    });
+  </script>
+
+
+
+</html>

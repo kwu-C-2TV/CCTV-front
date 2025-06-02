@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <title>CCTV 설정</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="./setting_style.css" />
+</head>
+
+<body>
+    <div class="card">
+        <div class="header">CCTV 위치 기반 안전 정보</div>
+        <button class="exit-header" onclick="location.href='../home/home_PC.html'">×</button>
+
+        <!-- 위험도 기준 -->
+        <div class="section">
+            <div class="box risk-box">
+                <div class="label">위험도 별 점수 기준</div>
+                <div class="risk-row">
+                    <div class="dot green"></div> 점수: 80 이상
+                </div>
+                <div class="risk-row">
+                    <div class="dot lightgreen"></div> 점수: 60 ~ 79 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot yellow"></div> 점수: 40 ~ 59 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot orange"></div> 점수: 20 ~ 39 점
+                </div>
+                <div class="risk-row">
+                    <div class="dot red"></div> 점수: 0 ~ 19 점
+                </div>
+            </div>
+            <button class="btn">위험 알림 받기</button>
+        </div>
+
+        <!-- 아이콘 설정 -->
+        <div class="section">
+            <div class="box">
+                <div class="label">아이콘 설정</div>
+                <div class="slider-group">
+                    <div class="icon-container">
+                        <img id="icon1" class="icon-img" src="/public/images/cctv.png" alt="icon1" style="width: 30px;" />
+                        <img id="icon2" class="icon-img" src="/public/images/streetlamp.png"
+                            alt="icon2" style="width: 30px;" />
+                    </div>
+                    <input type="range" id="iconSlider" class="slider" min="25" max="40" value="30">
+                </div>
+                <div class="bottom-row">
+                    <span id="iconValue" class="value-text">30px</span>
+                    <div id="iconToggle" class="toggle active"></div>
+                </div>
+            </div>
+        </div>
+
+
+        <!-- 히트맵 색상과 투명도 조절 -->
+        <div class="box">
+            <div class="label" style="text-align:left;">히트맵 투명도 설정</div>
+            <div style="display: flex; justify-content: center; gap: 6px; margin-top: 0.1px; margin-bottom: 0.1px;">
+                <div class="heatmap-dot red" id="dotRed"></div>
+                <div class="heatmap-dot orange" id="dotOrange"></div>
+                <div class="heatmap-dot yellow" id="dotYellow"></div>
+                <div class="heatmap-dot lightgreen" id="dotLightGreen"></div>
+                <div class="heatmap-dot green" id="dotGreen"></div>
+            </div>
+            <div class="slider-group">
+                <input type="range" id="heatSlider" class="slider" min="0" max="100" value="50">
+            </div>
+            <div class="bottom-row">
+                <span id="heatValue" class="value-text">50%</span>
+                <div id="heatToggle" class="toggle active"></div>
+            </div>
+        </div>
+
+
+
+        <!-- 팝업 HTML -->
+        <div id="popupOverlay" class="popup-overlay">
+            <div class="popup">
+                <button class="close-btn" onclick="closePopup()">×</button>
+                <div class="popup-title">위험 알림 수신 레벨 선택</div>
+                <div class="circle-group">
+                    <div class="circle red" data-risk="red"></div>
+                    <div class="circle orange" data-risk="orange"></div>
+                    <div class="circle yellow" data-risk="yellow"></div>
+                    <div class="circle lightgreen" data-risk="lightgreen"></div>
+                    <div class="circle green" data-risk="green"></div>
+                </div>
+                <button class="btn" onclick="closePopup()">확인</button>
+            </div>
+        </div>
+
+        <script src="setting_script.js"></script>
+
+</body>
+
+</html>
