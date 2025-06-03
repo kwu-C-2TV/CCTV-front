@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>CCTV 위치 검색</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="./mobile_style.css" />
+  <script
+    src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=f0a5l6s8em&submodules=geocoder,visualization,geometry"></script>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-wrapper">
+    <div class="app-container">
+      <div class="header-bar">
+        <div class="header-title">CCTV 위치 기반 안전 정보</div>
+        <button class="settings" onclick="location.href='../setting/setting.html'">⚙️</button>
+        <button class="PC" onclick="location.href='../home/home_PC.html'">💻</button>
+      </div>      
+      <div class="top-ui">
+        <div class="search-bar">
+          <input type="text" id="searchInput" placeholder="주소 키워드 입력 (예: 시흥대로)">
+          <button id="searchBtn">🔍</button>
+        </div>
+        <div class="slider-btn-row">
+          <div class="range-container">
+            <label>반경: <span id="radiusLabel" >100</span>m</label>
+            <input type="range" min="50" max="300" step="10" value="100" id="radiusInput" />
+          </div>
+          <div class="floating-btns">
+            <button class="circle-btn" id="btnCCTV" onclick="toggleCCTVMarkers()">
+              <img src="/public/images/cctv.png" alt="CCTV" style="width: 20px; height: 20px;">
+            </button>
+            <button class="circle-btn" id="btnLamp">
+              <img src="/public/images/streetlamp.png" alt="Lamp" style="width: 20px; height: 20px;">
+            </button>
+            <button class="circle-btn" id="btnHeat">
+              <!--img src="../img/heat.png" alt="Heat" style="width: 20px; height: 20px;"-->
+            </button>
+            <button class="gps-btn"  onclick="searchByCurrentLocation()">📍</button>
+          </div>
+        </div>
+        <div class="score-badge" id="safetyScoreLabel">0점</div>
+
+
+      </div>
+      <div id="map"></div>
+      <div id="currentAddress" style="display:none"></div>
+      <div id="resultList" style="display:none"></div>
+      <canvas id="facilityChart" style="display:none"></canvas>
+      <canvas id="safetyDonut" style="display:none"></canvas>
+
+      <button class="kako-gps-btn"">
+        <img src="/public/images/pinicon.png" alt="GPS" style="width: 50px; height: 50px;">
+      </button>
+    </div>
+  </div>
+  <script src="./heatmap.js"></script>
+  <script src="./mobile_script.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', initMap);
+  </script>
+</body>
+</html>
