@@ -29,7 +29,7 @@
     <div class="controls">
       <input type="text" id="searchInput" placeholder="주소 키워드 입력 (예: 시흥대로)">
       <button id="searchBtn">검색</button>
-      <button id="showAllStreetlampsBtn"> 가로등 전체 보기</button>
+      <button id="showAllStreetlampsBtn"> 가로등 1km 내 보기</button>
 
       <div class="range-container">
         <label>반경: <span id="radiusLabel">100</span>m</label>
@@ -78,6 +78,7 @@
     </div>
 
     <!-- script.js 연결 -->
+    <script src="./heatmap.js"></script>
     <script src="./script.js"></script>
   </body>
   <script>

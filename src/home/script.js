@@ -31,9 +31,17 @@ function updateRadiusLabel() {
 
   if (userCircle && currentUserLat && currentUserLon) {
     userCircle.setRadius(radius);
-    updateNearbyFacilities(currentUserLat, currentUserLon);
+
+    const activeTab = document.querySelector('.tab-btn.active')?.innerText;
+    if (activeTab && activeTab.includes('히트맵')) {
+      heatmap.show(map, currentUserLat, currentUserLon, radius);
+    } else {
+      updateNearbyFacilities(currentUserLat, currentUserLon);
+    }
   }
 }
+
+
 
 const riskLevelThreshold = {
   red: 20,
@@ -66,7 +74,7 @@ function drawFacilityChart(data) {
   window.facilityChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: ['CCTV', '가로등', '병원', '경찰서'],
+      labels: ['CCTV', '가로등'],
       datasets: [{
         label: '시설 개수',
         data: [data.cctv, data.store, data.hospital, data.police],
@@ -187,12 +195,35 @@ function closeRiskAlert() {
   document.getElementById('riskAlertPopup').style.display = 'none';
 }
 
-function calculateSafetyScore({ cctv, store, hospital, police }) {
-  const weight = { cctv: 5, store: 7, hospital: 10, police: 15 };
-  const rawScore = cctv * weight.cctv + store * weight.store + hospital * weight.hospital + police * weight.police;
-  const maxScore = 10 * weight.cctv + 5 * weight.store + 2 * weight.hospital + 2 * weight.police;
-  return Math.min(Math.round((rawScore / maxScore) * 100), 100);
+function calculateSafetyScore({ cctv, lamp, accidentCount, policeDist }) {
+  const cctvWeight = 0.3;
+  const lampWeight = 0.2;
+  const accidentWeight = -0.3;
+  const policeWeight = 0.2;
+
+  // CCTV (최대 50개 기준)
+  const cctvScore = Math.min(cctv / 50, 1) * 100;
+
+  // 가로등 (최대 100개 기준)
+  const lampScore = Math.min(lamp / 100, 1) * 100;
+
+  // 사고 이력 (최대 10건 감점, 0건 = 100점)
+  const accidentScore = Math.max(100 - accidentCount * 10, 0);
+
+  // 경찰서 거리 (1km 이내 = 100점, 3km 이상 = 0점 선형 감소)
+  const policeScore = Math.max(0, 100 - (policeDist / 3000) * 100);
+
+  // 종합 점수 계산
+  const finalScore = (
+    cctvScore * cctvWeight +
+    lampScore * lampWeight +
+    accidentScore * Math.abs(accidentWeight) + // 감점이므로 보정
+    policeScore * policeWeight
+  );
+
+  return Math.round(Math.min(finalScore, 100));
 }
+
 
 // 📌 시설 필터링 및 다시 그리기
 function updateNearbyFacilities(lat, lon) {
@@ -209,7 +240,7 @@ function updateNearbyFacilities(lat, lon) {
       position: new naver.maps.LatLng(loc.lat, loc.lot),
       map: map,
       icon: {
-        content: `<img src="/public/images/cctv.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        content: `<img src="../../public/images/cctv.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
@@ -303,6 +334,73 @@ function searchByCurrentLocation() {
   });
 }
 
+// ✅ 히트맵 객체 전역 선언
+let heatmapOverlay = null;
+
+
+function showSafetyHeatmap() {
+  if (!navigator.geolocation) return alert("위치 정보를 사용할 수 없습니다.");
+
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    currentUserLat = lat;
+    currentUserLon = lon;
+    const locationLatLng = new naver.maps.LatLng(lat, lon);
+    map.setCenter(locationLatLng);
+
+    // 1. CCTV 데이터 요청
+    let cctvPoints = [];
+    try {
+      const res = await fetch(`${API_BASE}/api/cctv?q=구`);
+      const data = await res.json();
+      const nearby = data.filter(item => getDistance(lat, lon, item.lat, item.lot) <= radius);
+      cctvPoints = nearby.map(item => new naver.maps.LatLng(item.lat, item.lot));
+    } catch (e) {
+      console.warn("CCTV 불러오기 실패", e);
+    }
+
+    // 2. 가로등 데이터 요청
+    let lampPoints = [];
+    try {
+      const res = await fetch(`${API_BASE}/api/streetlamps/all`);
+      const data = await res.json();
+      const nearby = data.lamps.filter(item => getDistance(lat, lon, item.lat, item.lng) <= radius);
+      lampPoints = nearby.map(item => new naver.maps.LatLng(item.lat, item.lng));
+    } catch (e) {
+      console.warn("가로등 불러오기 실패", e);
+    }
+
+    // 3. 히트맵 표시
+    const heatmapData = [...cctvPoints, ...lampPoints];
+    if (heatmapOverlay) heatmapOverlay.setMap(null);
+    heatmapOverlay = new naver.maps.visualization.HeatMap({
+      map: map,
+      data: heatmapData,
+      radius: 20,
+      opacity: 0.6
+    });
+    heatmapOverlay.setMap(map);
+
+    // 리스트 정보 출력
+    document.getElementById("resultList").innerHTML =
+      `<div style="font-weight:bold; margin-bottom: 5px;">
+        🔥 히트맵 반경 ${radius}m 내 시설 ${heatmapData.length}개
+      </div>`;
+    document.querySelector('#list h3').innerText = "히트맵 표시 중";
+  });
+}
+
+navigator.geolocation.getCurrentPosition(async (pos) => {
+  const lat = pos.coords.latitude;
+  const lon = pos.coords.longitude;
+  currentUserLat = lat;
+  currentUserLon = lon;
+  map.setCenter(new naver.maps.LatLng(lat, lon));
+
+  await heatmap.show(map, lat, lon, radius); // 👉 핵심만 호출
+});
+
 // ✅ 모든 가로등 보기 기능
 // ✅ 5km 반경 가로등 보기
 document.getElementById('showAllStreetlampsBtn').addEventListener('click', async () => {
@@ -383,9 +481,12 @@ function updateNearbyStreetlamps(lat, lon) {
   streetlampMarkers.forEach(m => m.setMap(null));
   streetlampMarkers = [];
 
+  // ✅ 히트맵 마커도 초기화
+  if (!window.heatmapMarkers) window.heatmapMarkers = [];
+  window.heatmapMarkers = window.heatmapMarkers.filter(m => m._cctv); // CCTV 마커만 유지
+
   // CCTV 리스트와는 별도로 가로등 리스트 영역 만들기
   const listEl = document.getElementById('resultList');
-  listEl.innerHTML = '';
   listEl.innerHTML = `<div style="font-weight:bold; margin-bottom: 5px;">🔦 가로등 ${filtered.length}개</div>`;
 
   filtered.forEach((lamp, i) => {
@@ -393,12 +494,19 @@ function updateNearbyStreetlamps(lat, lon) {
       position: new naver.maps.LatLng(lamp.lat, lamp.lng),
       map: map,
       icon: {
-        content: `<img src="/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        content: `<img src="../../public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
+
+    // 일반 마커에 저장
     streetlampMarkers.push(marker);
 
+    // ✅ 히트맵 마커로도 저장
+    marker._lamp = true; // 구분 태그
+    window.heatmapMarkers.push(marker);
+
+    // 리스트 출력
     const item = document.createElement('div');
     item.className = 'list-item';
     item.innerText = lamp.설치장소 || '설치장소 미기재';
@@ -419,6 +527,7 @@ function updateNearbyStreetlamps(lat, lon) {
   drawFacilityChart(facilityData);
   drawSafetyDonut(10); // 현재는 가로등에 대해 임의 점수 10점
 }
+
 
 // ✅ 가로등 API 호출
 async function searchStreetlampsByCurrentLocation(lat, lon) {
