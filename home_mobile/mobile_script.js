@@ -266,7 +266,7 @@ function updateNearbyFacilities(lat, lon) {
       position: new naver.maps.LatLng(loc.lat, loc.lot),
       map: map,
       icon: {
-        content: `<img src="/public/images/cctv.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        content: `<img src="../public/images/cctv.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
@@ -541,7 +541,7 @@ function updateNearbyStreetlamps(lat, lon) {
       position: new naver.maps.LatLng(lamp.lat, lamp.lng),
       map: lampVisible ? map : null,
       icon: {
-        content: `<img src="/public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        content: `<img src="../public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
