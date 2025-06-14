@@ -10,6 +10,9 @@
 
   <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <script src="https://developers.kakao.com/sdk/js/kakao.js"></script>
+
 </head>
 <body>
   <div class="app-wrapper">
@@ -21,25 +24,28 @@
       </div>      
       <div class="top-ui">
         <div class="search-bar">
-          <input type="text" id="searchInput" placeholder="주소 키워드 입력 (예: 시흥대로)">
+          <input type="text" id="searchInput" placeholder="도로명 주소 입력">
           <button id="searchBtn">🔍</button>
+          <button id="resetBtn">초기화</button>
         </div>
         <div class="slider-btn-row">
           <div class="range-container">
-            <label>반경: <span id="radiusLabel" >100</span>m</label>
-            <input type="range" min="50" max="300" step="10" value="100" id="radiusInput" />
+            <label>반경: <span id="radiusLabel" style="cursor:pointer;">100</span>m</label>
+            <input type="range" min="50" max="1000" step="10" value="100" id="radiusInput" />
           </div>
           <div class="floating-btns">
             <button class="circle-btn" id="btnCCTV" onclick="toggleCCTVMarkers()">
               <img src="/public/images/cctv.png" alt="CCTV" style="width: 20px; height: 20px;">
             </button>
-            <button class="circle-btn" id="btnLamp">
+            <button class="circle-btn" id="btnLamp" onclick="toggleLampMarkers()">
               <img src="/public/images/streetlamp.png" alt="Lamp" style="width: 20px; height: 20px;">
             </button>
-            <button class="circle-btn" id="btnHeat">
-              <!--img src="../img/heat.png" alt="Heat" style="width: 20px; height: 20px;"-->
+            <button class="circle-btn" id="btnHeat" onclick="toggleHeatmap()">
+              <img src="../public/images/heatmap.png" alt="Heat" style="width: 20px; height: 20px;">
             </button>
-            <button class="gps-btn"  onclick="searchByCurrentLocation()">📍</button>
+            <button class="gps-btn"  onclick="searchByCurrentLocation()">
+               <img src="../public/images/location.png" alt="Heat" style="width: 20px; height: 20px;">
+            </button>
           </div>
         </div>
         <div class="score-badge" id="safetyScoreLabel">0점</div>
@@ -52,8 +58,8 @@
       <canvas id="facilityChart" style="display:none"></canvas>
       <canvas id="safetyDonut" style="display:none"></canvas>
 
-      <button class="kako-gps-btn"">
-        <img src="/public/images/pinicon.png" alt="GPS" style="width: 50px; height: 50px;">
+      <button class="kako-gps-btn" onclick="shareNaverMap()">
+        <img src="/public/images/pinicon.png" alt="GPS" style="width: 40px; height: 40px;">
       </button>
     </div>
   </div>
@@ -62,5 +68,80 @@
   <script>
     document.addEventListener('DOMContentLoaded', initMap);
   </script>
+
+
+
+  <script>
+    function shareNaverMap() {
+      if (!navigator.geolocation) {
+        alert("이 브라우저에서는 위치 기능을 지원하지 않습니다.");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(function (position) {
+        const lat = position.coords.latitude.toFixed(6);
+        const lon = position.coords.longitude.toFixed(6);
+        const naverUrl = `https://map.naver.com/v5/search/${lat},${lon}`;
+
+        if (navigator.share) {
+          navigator.share({
+            title: '내 위치 공유',
+            text: '네이버 지도에서 내 위치를 확인하세요!',
+            url: naverUrl
+          }).catch((err) => {
+            alert("공유를 취소했거나 실패했습니다.");
+            console.error(err);
+          });
+        } else if (navigator.clipboard) {
+          navigator.clipboard.writeText(naverUrl).then(() => {
+            alert("공유 기능이 없어 링크를 복사했어요:\n" + naverUrl);
+          });
+        } else {
+          alert("다음 링크를 복사해 공유하세요:\n" + naverUrl);
+        }
+      }, function () {
+        alert("위치 정보를 가져오지 못했습니다.");
+      });
+    }
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+    document.getElementById('searchInput').value = ''; // 입력값 초기화
+    document.getElementById('currentAddress').innerText = ''; // 주소 표시 제거
+
+    if (userCircle) {
+      userCircle.setMap(null);
+      userCircle = null;
+    }
+
+    // 지도 초기 위치로 이동
+    map.setCenter(new naver.maps.LatLng(37.5665, 126.978)); // 기본 중심
+    map.setZoom(15);
+
+    // 마커들 제거
+    markers.forEach(marker => marker.setMap(null));
+    lampMarkers.forEach(marker => marker.setMap(null));
+    markers = [];
+    lampMarkers = [];
+
+    // 리스트 초기화
+    document.getElementById('resultList').innerHTML = '';
+
+    // 히트맵 제거
+    if (heatmapOverlay) {
+      heatmapOverlay.setMap(null);
+      heatmapOverlay = null;
+    }
+
+    // 차트 제거
+    if (window.facilityChart) window.facilityChart.destroy();
+    if (window.safetyDonut) window.safetyDonut.destroy();
+
+    // 점수 초기화
+    document.getElementById('safetyScoreLabel').innerText = '';
+  });
+
+  </script>
+
+
 </body>
 </html>

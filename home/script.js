@@ -3,6 +3,10 @@ const API_BASE = 'https://cctv-api-server.onrender.com';
 let map, radius = 100;
 let markers = [], infoWindows = [], circles = [], userCircle = null;
 let currentUserLat = null, currentUserLon = null;
+let cctvVisible = true; // CCTV 마커 표시 여부
+let lampVisible = true; // 가로등 마커 표시 여부
+let heatmapVisible = false;
+
 
 // 📌 거리 계산 함수 (Haversine)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -229,7 +233,13 @@ function calculateSafetyScore({ cctv, lamp, accidentCount, policeDist }) {
 function updateNearbyFacilities(lat, lon) {
   const filtered = window.lastFetchedCCTV?.filter(loc => getDistance(lat, lon, loc.lat, loc.lot) <= radius) || [];
   const iconSize = parseInt(localStorage.getItem('iconSize')) || 30;
-  markers.forEach(m => m.setMap(null));
+  markers.forEach(m => {
+  if (cctvVisible) {
+      m.setMap(map);
+    } else {
+      m.setMap(null);
+    }
+  });
   infoWindows.forEach(iw => iw.setMap(null));
   markers = [];
   infoWindows = [];
@@ -238,13 +248,12 @@ function updateNearbyFacilities(lat, lon) {
   filtered.forEach((loc, i) => {
     const marker = new naver.maps.Marker({
       position: new naver.maps.LatLng(loc.lat, loc.lot),
-      map: map,
+      map: cctvVisible ? map : null, // 🔧 상태 반영
       icon: {
         content: `<img src="/public/images/cctv.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
-
 
 
     markers.push(marker);
@@ -254,9 +263,12 @@ function updateNearbyFacilities(lat, lon) {
     });
     infoWindows.push(infoWindow);
 
-    marker.addListener('click', () => {
+    marker.addListener('mouseover', () => {
       infoWindows.forEach(iw => iw.close());
       infoWindow.open(map, marker);
+    });
+    marker.addListener('mouseout', () => {
+      infoWindow.close();
     });
 
     const item = document.createElement('div');
@@ -276,6 +288,7 @@ function updateNearbyFacilities(lat, lon) {
     hospital: 0,
     police: 0
   };
+
   drawFacilityChart(facilityData);
   drawSafetyDonut(calculateSafetyScore(facilityData));
 }
@@ -316,8 +329,8 @@ function searchByCurrentLocation() {
     });
 
     reverseGeocode(lat, lon, async (fullAddress, districtName) => {
-      if (!districtName) return alert('구 이름을 찾을 수 없습니다.');
-      document.getElementById('currentAddress').innerText = `📍 현위치 주소: ${fullAddress}`;
+      if (!districtName) return //alert('구 이름을 찾을 수 없습니다.');
+      //document.getElementById('currentAddress').innerText = `📍 현위치 주소: ${fullAddress}`;
 
       try {
         const res = await fetch(`${API_BASE}/api/cctv?q=${encodeURIComponent(districtName)}`);
@@ -401,71 +414,6 @@ navigator.geolocation.getCurrentPosition(async (pos) => {
   await heatmap.show(map, lat, lon, radius); // 👉 핵심만 호출
 });
 
-// ✅ 모든 가로등 보기 기능
-// ✅ 5km 반경 가로등 보기
-document.getElementById('showAllStreetlampsBtn').addEventListener('click', async () => {
-  if (!navigator.geolocation) {
-    return alert("위치 정보 사용이 불가능합니다.");
-  }
-
-  navigator.geolocation.getCurrentPosition(async (position) => {
-    const userLat = position.coords.latitude;
-    const userLon = position.coords.longitude;
-
-    try {
-      const res = await fetch(`${API_BASE}/api/streetlamps/all`);
-      const data = await res.json();
-
-      // 5km 이내만 필터링
-      const filtered = data.lamps.filter(lamp =>
-        getDistance(userLat, userLon, lamp.lat, lamp.lng) <= 1000
-      );
-
-      // 기존 마커 제거
-      streetlampMarkers.forEach(m => m.setMap(null));
-      streetlampMarkers = [];
-
-      const iconSize = parseInt(localStorage.getItem('iconSize')) || 30;
-      const listEl = document.getElementById('resultList');
-      listEl.innerHTML = `<div style="font-weight:bold; margin-bottom: 5px;">🔦 5km 이내 가로등 ${filtered.length}개</div>`;
-
-      filtered.forEach((lamp, i) => {
-        const marker = new naver.maps.Marker({
-          position: new naver.maps.LatLng(lamp.lat, lamp.lng),
-          map: map,
-          icon: {
-            content: `<img src="../../public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
-            anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
-          }
-        });
-        streetlampMarkers.push(marker);
-
-        const item = document.createElement('div');
-        item.className = 'list-item';
-        item.innerText = lamp.설치장소 || `ID: ${lamp.id}`;
-        item.addEventListener('click', () => {
-          map.setCenter(marker.getPosition());
-        });
-        listEl.appendChild(item);
-      });
-
-      map.setCenter(new naver.maps.LatLng(userLat, userLon));
-      map.setZoom(13);
-      document.querySelector('#list h3').innerText = "5km 이내 가로등 목록";
-
-      drawFacilityChart({ cctv: 0, store: 0, hospital: 0, police: 0 });
-      drawSafetyDonut(10); // 임의 안전 점수
-
-    } catch (err) {
-      console.error('❌ 5km 가로등 불러오기 실패:', err);
-      alert('가로등 데이터를 불러오지 못했습니다.');
-    }
-  }, () => {
-    alert("위치 권한이 필요합니다.");
-  });
-});
-
-
 
 
 // ✅ 가로등 전용 마커 및 데이터
@@ -487,17 +435,18 @@ function updateNearbyStreetlamps(lat, lon) {
 
   // CCTV 리스트와는 별도로 가로등 리스트 영역 만들기
   const listEl = document.getElementById('resultList');
-  listEl.innerHTML = `<div style="font-weight:bold; margin-bottom: 5px;">🔦 가로등 ${filtered.length}개</div>`;
+  listEl.innerHTML = `<div style="font-weight:bold; margin-bottom: 5px;"> -> 가로등 ${filtered.length}개</div>`;
 
   filtered.forEach((lamp, i) => {
     const marker = new naver.maps.Marker({
       position: new naver.maps.LatLng(lamp.lat, lamp.lng),
-      map: map,
+      map: lampVisible ? map : null, // 🔧 이거 필수
       icon: {
-        content: `<img src="/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        content: `<img src="/public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
         anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
       }
     });
+    ;
 
     // 일반 마커에 저장
     streetlampMarkers.push(marker);
@@ -586,7 +535,233 @@ window.onload = () => {
   initMap();
   initTabSync(map);
   updateRadiusLabel();
-  searchByCurrentLocation();
+
+  const isFirstLoad = localStorage.getItem('firstVisit') !== 'false';
+  if (isFirstLoad) {
+    searchByCurrentLocation(); // 최초 방문시에만 실행
+    localStorage.setItem('firstVisit', 'false');
+  }
+
   document.getElementById('radiusInput').addEventListener('input', updateRadiusLabel);
 };
 
+
+document.getElementById('radiusLabel').addEventListener('click', () => {
+  const labelSpan = document.getElementById('radiusLabel');
+  const currentValue = labelSpan.innerText;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = 50;
+  input.max = 1500;
+  input.value = currentValue;
+  input.style.width = '60px';
+  input.id = 'radiusTextInput';
+
+  labelSpan.replaceWith(input);
+  input.focus();
+
+  let alreadyFinalized = false;
+
+  const finalizeInput = () => {
+    if (alreadyFinalized) return;
+    alreadyFinalized = true;
+
+    let val = parseInt(input.value);
+    if (isNaN(val)) val = radius;
+    val = Math.max(50, Math.min(1500, val));
+    document.getElementById('radiusInput').value = val;
+    updateRadiusLabel();
+
+    const span = document.createElement('span');
+    span.id = 'radiusLabel';
+    span.innerText = val;
+    span.style.cursor = 'pointer';
+
+    if (input.parentNode && input.parentNode.contains(input)) {
+      input.replaceWith(span);
+    }
+
+    span.addEventListener('click', () => {
+      input.value = span.innerText;
+      span.replaceWith(input);
+      input.focus();
+      alreadyFinalized = false;
+    });
+  };
+
+  input.addEventListener('blur', finalizeInput);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finalizeInput();
+  });
+});
+
+
+let lampMarkers = []; // 전역에 선언되어 있어야 함
+
+function updateNearbyStreetlamps(lat, lon) {
+  // 기존 마커 제거
+  lampMarkers.forEach(m => m.setMap(null));
+  lampMarkers = [];
+
+  if (!lastFetchedStreetlamps) return;
+
+  const iconSize = 20;
+
+  // 반경 내 필터링
+  const filtered = lastFetchedStreetlamps.filter(lamp =>
+    getDistance(lat, lon, lamp.lat, lamp.lng) <= radius
+  );
+
+  filtered.forEach(lamp => {
+    const marker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(lamp.lat, lamp.lng),
+      map: lampVisible ? map : null,
+      icon: {
+        content: `<img src="/public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
+      }
+    });
+
+    lampMarkers.push(marker);
+  });
+}
+
+function toggleCCTVMarkers() {
+  cctvVisible = !cctvVisible;
+  markers.forEach(m => m.setMap(cctvVisible ? map : null));
+  
+  const btn = document.getElementById('btnCCTV');
+  btn.classList.toggle('active', cctvVisible);
+  btn.classList.toggle('alt', !cctvVisible);
+}
+
+
+
+function toggleLampMarkers() {
+  lampVisible = !lampVisible;
+  lampMarkers.forEach(m => m.setMap(lampVisible ? map : null));
+
+  const btn = document.getElementById('btnLamp');
+  btn.classList.toggle('active', lampVisible);
+  btn.classList.toggle('alt', !lampVisible);
+}
+
+
+// 반경 라벨 클릭 시 입력창으로 전환
+document.getElementById('radiusLabel').addEventListener('click', () => {
+  const labelSpan = document.getElementById('radiusLabel');
+  const currentValue = labelSpan.innerText;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = 50;
+  input.max = 1500;
+  input.value = currentValue;
+  input.style.width = '60px';
+  input.id = 'radiusTextInput';
+
+  labelSpan.replaceWith(input);
+  input.focus();
+
+  let alreadyFinalized = false;  // 💡 플래그 추가
+
+  const finalizeInput = () => {
+    if (alreadyFinalized) return; // 중복 방지
+    alreadyFinalized = true;
+
+    let val = parseInt(input.value);
+    if (isNaN(val)) val = radius;
+    val = Math.max(50, Math.min(1500, val));
+    document.getElementById('radiusInput').value = val;
+    updateRadiusLabel();
+
+    const span = document.createElement('span');
+    span.id = 'radiusLabel';
+    span.innerText = val;
+    span.style.cursor = 'pointer';
+
+    if (input.parentNode && input.parentNode.contains(input)) {
+      input.replaceWith(span);
+    }
+
+    // 다시 클릭 이벤트 연결
+    span.addEventListener('click', () => {
+      input.value = span.innerText;
+      span.replaceWith(input);
+      input.focus();
+      alreadyFinalized = false; // 재진입 가능하게 초기화
+    });
+  };
+
+  input.addEventListener('blur', finalizeInput);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finalizeInput();
+  });
+});
+
+
+document.getElementById('searchBtn').addEventListener('click', async () => {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return alert("주소를 입력해주세요.");
+
+  naver.maps.Service.geocode({ query }, async (status, response) => {
+    if (status !== naver.maps.Service.Status.OK) {
+      return alert('주소 검색 실패');
+    }
+
+    const result = response.v2.addresses[0];
+    if (!result?.x || !result?.y) return alert('좌표 정보를 찾을 수 없습니다.');
+
+    const lat = parseFloat(result.y);
+    const lon = parseFloat(result.x);
+    const location = new naver.maps.LatLng(lat, lon);
+    currentUserLat = lat;
+    currentUserLon = lon;
+
+    map.setCenter(location);
+    map.setZoom(15);
+
+    // 🔄 기존 원 제거 후 새로 생성
+    if (userCircle) userCircle.setMap(null);
+    userCircle = new naver.maps.Circle({
+      map: map,
+      center: location,
+      radius: radius,
+      strokeColor: '#2f80ed',
+      strokeOpacity: 0.8,
+      strokeWeight: 1,
+      fillColor: '#2f80ed',
+      fillOpacity: 0.2
+    });
+
+    // 🔵 파란 원 중앙 마커
+    new naver.maps.Marker({
+      position: location,
+      map: map,
+      icon: {
+        content: `<div style="width: 18px; height: 18px; background: blue; border-radius: 50%; border: 2px solid white;"></div>`,
+        anchor: new naver.maps.Point(9, 9)
+      }
+    });
+
+    // 📍 주소 출력
+    document.getElementById('currentAddress').innerText =
+      `📍 검색 주소: ${result.roadAddress || result.jibunAddress}`;
+
+    // 📡 CCTV 불러오기
+    const district = result.jibunAddress?.match(/([가-힣]+구)/)?.[1];
+    if (!district) return alert('구 정보를 찾을 수 없습니다.');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/cctv?q=${encodeURIComponent(district)}`);
+      const data = await res.json();
+      window.lastFetchedCCTV = data; // 데이터 저장
+      updateNearbyFacilities(lat, lon);
+    } catch (err) {
+      console.error('❌ CCTV 검색 실패:', err);
+      alert('CCTV 정보를 불러오지 못했습니다.');
+    }
+
+    // 🔦 가로등도 호출
+    searchStreetlampsByCurrentLocation(lat, lon);
+  });
+});

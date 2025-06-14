@@ -5,6 +5,52 @@ let markers = [], infoWindows = [], circles = [], userCircle = null;
 let currentUserLat = null, currentUserLon = null;
 let cctvVisible = true; // CCTV 마커 표시 여부
 let lampVisible = true; // CCTV 마커 표시 여부
+let heatmapVisible = false;
+let heatmapOverlay = null;
+
+function toggleHeatmap() {
+  heatmapVisible = !heatmapVisible;
+
+  const heatBtn = document.getElementById('btnHeat');
+  if (heatBtn) {
+    heatBtn.classList.remove('active', 'alt');
+    heatBtn.classList.add(heatmapVisible ? 'active' : 'alt');
+  }
+
+  // 기존 히트맵 제거
+  if (heatmapOverlay) {
+    heatmapOverlay.setMap(null);
+    heatmapOverlay = null;
+  }
+
+  // 히트맵 다시 생성 (현재 위치 주변 시설 기준)
+  if (heatmapVisible && currentUserLat && currentUserLon) {
+    const filtered = window.lastFetchedCCTV?.filter(loc =>
+      getDistance(currentUserLat, currentUserLon, loc.lat, loc.lot) <= radius
+    ) || [];
+
+    const heatmapPoints = filtered.map(loc => new naver.maps.LatLng(loc.lat, loc.lot));
+
+    heatmapOverlay = new naver.maps.visualization.HeatMap({
+      map: map,
+      radius: 30,
+      opacity: 0.6,
+      data: heatmapPoints,
+      gradient: [
+        'rgba(255, 255, 204, 0)',   // 밝은 노랑
+        'rgba(199, 233, 180, 0.6)', // 연초록
+        'rgba(127, 205, 187, 0.7)', // 청록
+        'rgba(65, 182, 196, 0.8)',  // 청록 중간
+        'rgba(44, 127, 184, 0.9)',  // 파랑
+        'rgba(37, 52, 148, 1)'      // 짙은 파랑
+      ]
+    });
+  }
+
+  //console.log('🔥 히트맵 토글됨 →', heatmapVisible);
+}
+
+
 
 // 📌 거리 계산 함수 (Haversine)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -29,13 +75,22 @@ function initMap() {
 // 📌 반경 라벨 및 지도 반영
 function updateRadiusLabel() {
   radius = parseInt(document.getElementById('radiusInput').value);
-  document.getElementById('radiusLabel').innerText = radius;
+  
+  const label = document.getElementById('radiusLabel');
+  if (label) label.innerText = radius; // 🔧 null 체크 추가
+
+  if (userCircle) {
+    userCircle.setRadius(radius);
+    userCircle.setCenter(new naver.maps.LatLng(currentUserLat, currentUserLon));
+  }
 
   if (userCircle && currentUserLat && currentUserLon) {
-    userCircle.setRadius(radius);
     updateNearbyFacilities(currentUserLat, currentUserLon);
+    searchStreetlampsByCurrentLocation(currentUserLat, currentUserLon);
+    updateNearbyStreetlamps(currentUserLat, currentUserLon);
   }
 }
+
 
 const riskLevelThreshold = {
   red: 20,
@@ -216,7 +271,6 @@ function updateNearbyFacilities(lat, lon) {
       }
     });
 
-
     markers.push(marker);
 
     const infoWindow = new naver.maps.InfoWindow({
@@ -245,21 +299,10 @@ function updateNearbyFacilities(lat, lon) {
 
   const facilityData = {
     cctv: filtered.length,
-    store: 2,
-    hospital: 1,
+    store: 0,
+    hospital: 0,
     police: 0
   };
-
-  // 히트맵 레이어 추가
-  if (window.heatmapOverlay) window.heatmapOverlay.setMap(null); // 기존 제거
-
-  const heatmapPoints = filtered.map(loc => new naver.maps.LatLng(loc.lat, loc.lot));
-  window.heatmapOverlay = new naver.maps.visualization.HeatMap({
-    map: map,
-    radius: 30,
-    opacity: 0.6,
-    data: heatmapPoints
-  });
 
   drawFacilityChart(facilityData);
   drawSafetyDonut(calculateSafetyScore(facilityData));
@@ -320,7 +363,6 @@ function searchByCurrentLocation() {
 }
 
 window.onload = () => {
-  // ✅ 초기 상태 설정 (기본값 저장)
   if (localStorage.getItem('iconToggle') === null) {
     localStorage.setItem('iconToggle', 'true');
   }
@@ -328,39 +370,52 @@ window.onload = () => {
   const iconToggle = localStorage.getItem('iconToggle') === 'true';
   const tabButtons = document.querySelectorAll('.circle-btn');
   const [heatBtn, lightBtn, cctvBtn] = tabButtons;
+  
 
-  // ✅ 초기 스타일 세팅
   const setButtonState = (btns, isEnabled) => {
     btns.forEach(btn => {
       btn.disabled = !isEnabled;
-      btn.classList.toggle('alt', !isEnabled); // 비활성화 시 회색
+      btn.classList.toggle('alt', !isEnabled);
       btn.style.cursor = isEnabled ? 'pointer' : 'not-allowed';
     });
   };
 
-  // ✅ 아이콘 설정 토글에 따른 버튼 활성/비활성
   setButtonState([lightBtn, cctvBtn], iconToggle);
 
-  // ✅ 히트맵 버튼은 항상 가능 (예시)
   heatBtn.disabled = false;
-  heatBtn.classList.remove('alt');
   heatBtn.style.cursor = 'pointer';
 
-  // ✅ 버튼 클릭 시 색상 토글 (비활성 버튼은 무시)
+  // 🔧 버튼 클릭 시 .alt 토글은 heatBtn 제외
   tabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!btn.disabled) {
-        btn.classList.toggle('alt'); // 색상 토글
-      }
-    });
+    if (btn.id !== 'btnHeat') {
+      btn.addEventListener('click', () => {
+        if (!btn.disabled) {
+          btn.classList.toggle('alt');
+        }
+      });
+    }
   });
 
-  // ✅ 지도 기능 초기화
+  // 🔧 heatBtn 초기 스타일 동기화
+  if (heatmapVisible) {
+    heatBtn.classList.add('active');
+    heatBtn.classList.remove('alt');
+  } else {
+    heatBtn.classList.add('alt');
+    heatBtn.classList.remove('active');
+  }
+
+  // 🔧 heatBtn 기능 연결
+  heatBtn.addEventListener('click', () => {
+    toggleHeatmap();
+  });
+
   initMap();
   updateRadiusLabel();
   searchByCurrentLocation();
   document.getElementById('radiusInput').addEventListener('input', updateRadiusLabel);
 };
+
 
 
 //토글
@@ -370,3 +425,186 @@ function toggleCCTVMarkers() {
     marker.setMap(cctvVisible ? map : null);
   });
 }
+
+
+document.getElementById('searchBtn').addEventListener('click', () => {
+  const query = document.getElementById('searchInput').value.trim();
+  if (!query) return alert("주소를 입력해주세요.");
+
+  naver.maps.Service.geocode({
+    query: query
+  }, async function (status, response) {
+    if (status !== naver.maps.Service.Status.OK) {
+      return alert('주소 검색 실패');
+    }
+
+    const results = response.v2.addresses;
+    if (!results || results.length === 0) {
+      return alert('검색 결과가 없습니다. 에) 광운로 20');
+    }
+
+    const result = results[0];
+
+    if (!result.y || !result.x) {
+      return alert('좌표 정보를 찾을 수 없습니다.');
+    }
+
+    //const result = response.v2.addresses[0];
+    const lat = parseFloat(result.y);
+    const lon = parseFloat(result.x);
+    const location = new naver.maps.LatLng(lat, lon);
+
+
+    currentUserLat = lat;
+    currentUserLon = lon;
+
+
+    // 지도 이동
+    map.setCenter(location);
+    map.setZoom(15);
+
+    // 기존 원 제거
+    if (userCircle) userCircle.setMap(null);
+
+    userCircle = new naver.maps.Circle({
+      map: map,
+      center: location,
+      radius: radius,
+      strokeColor: '#2f80ed',
+      strokeOpacity: 0.8,
+      strokeWeight: 1,
+      fillColor: '#2f80ed',
+      fillOpacity: 0.2
+    });
+
+    new naver.maps.Marker({
+      position: location,
+      map: map,
+      icon: {
+        content: `<div style="width: 18px; height: 18px; background: blue; border-radius: 50%; border: 2px solid white;"></div>`,
+        anchor: new naver.maps.Point(9, 9)
+      }
+    });
+
+    // 주소 표시
+    document.getElementById('currentAddress').innerText = `📍 검색 주소: ${result.roadAddress || result.jibunAddress}`;
+
+    // CCTV 불러오기
+    const district = result.jibunAddress?.match(/([가-힣]+구)/)?.[1];
+    if (!district) return alert('구 정보를 찾을 수 없습니다.');
+
+    try {
+      const res = await fetch(`${API_BASE}/api/cctv?q=${encodeURIComponent(district)}`);
+      const data = await res.json();
+      window.lastFetchedCCTV = data;
+      updateNearbyFacilities(lat, lon);
+    } catch (err) {
+      console.error('❌ CCTV 검색 실패:', err);
+      alert('CCTV 정보를 불러오지 못했습니다.');
+    }
+
+    // 가로등도 불러오기
+    searchStreetlampsByCurrentLocation(lat, lon);
+  });
+});
+
+async function searchStreetlampsByCurrentLocation(lat, lon) {
+  try {
+    const res = await fetch(`${API_BASE}/api/streetlamps?lat=${lat}&lng=${lon}&radius=${radius}`);
+    const data = await res.json();
+    lastFetchedStreetlamps = data.lamps;
+    updateNearbyStreetlamps(lat, lon);
+  } catch (err) {
+    console.error('❌ 가로등 검색 실패:', err);
+    alert('가로등 데이터를 불러오지 못했습니다.');
+  }
+}
+
+let lampMarkers = []; // 전역에 선언되어 있어야 함
+
+function updateNearbyStreetlamps(lat, lon) {
+  // 기존 마커 제거
+  lampMarkers.forEach(m => m.setMap(null));
+  lampMarkers = [];
+
+  if (!lastFetchedStreetlamps) return;
+
+  const iconSize = 20;
+
+  // 반경 내 필터링
+  const filtered = lastFetchedStreetlamps.filter(lamp =>
+    getDistance(lat, lon, lamp.lat, lamp.lng) <= radius
+  );
+
+  filtered.forEach(lamp => {
+    const marker = new naver.maps.Marker({
+      position: new naver.maps.LatLng(lamp.lat, lamp.lng),
+      map: lampVisible ? map : null,
+      icon: {
+        content: `<img src="/public/images/streetlamp.png" style="width:${iconSize}px;height:${iconSize}px;" />`,
+        anchor: new naver.maps.Point(iconSize / 2, iconSize / 2)
+      }
+    });
+
+    lampMarkers.push(marker);
+  });
+}
+
+
+function toggleLampMarkers() {
+  lampVisible = !lampVisible;
+  lampMarkers.forEach(marker => {
+    marker.setMap(lampVisible ? map : null);
+  });
+}
+
+// 반경 라벨 클릭 시 입력창으로 전환
+document.getElementById('radiusLabel').addEventListener('click', () => {
+  const labelSpan = document.getElementById('radiusLabel');
+  const currentValue = labelSpan.innerText;
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.min = 50;
+  input.max = 1500;
+  input.value = currentValue;
+  input.style.width = '60px';
+  input.id = 'radiusTextInput';
+
+  labelSpan.replaceWith(input);
+  input.focus();
+
+  let alreadyFinalized = false;  // 💡 플래그 추가
+
+  const finalizeInput = () => {
+    if (alreadyFinalized) return; // 중복 방지
+    alreadyFinalized = true;
+
+    let val = parseInt(input.value);
+    if (isNaN(val)) val = radius;
+    val = Math.max(50, Math.min(1500, val));
+    document.getElementById('radiusInput').value = val;
+    updateRadiusLabel();
+
+    const span = document.createElement('span');
+    span.id = 'radiusLabel';
+    span.innerText = val;
+    span.style.cursor = 'pointer';
+
+    if (input.parentNode && input.parentNode.contains(input)) {
+      input.replaceWith(span);
+    }
+
+    // 다시 클릭 이벤트 연결
+    span.addEventListener('click', () => {
+      input.value = span.innerText;
+      span.replaceWith(input);
+      input.focus();
+      alreadyFinalized = false; // 재진입 가능하게 초기화
+    });
+  };
+
+  input.addEventListener('blur', finalizeInput);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') finalizeInput();
+  });
+});
