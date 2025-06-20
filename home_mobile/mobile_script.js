@@ -8,6 +8,12 @@ let lampVisible = true; // CCTV 마커 표시 여부
 let heatmapVisible = false;
 let heatmapOverlay = null;
 
+function enableHeatmap() {
+  if (!heatmapVisible) {
+    toggleHeatmap();
+  }
+}
+
 function toggleHeatmap() {
   heatmapVisible = !heatmapVisible;
 
@@ -23,13 +29,20 @@ function toggleHeatmap() {
     heatmapOverlay = null;
   }
 
-  // 히트맵 다시 생성 (현재 위치 주변 시설 기준)
+  // 히트맵 다시 생성 (현재 위치 주변 CCTV + 가로등 기준)
   if (heatmapVisible && currentUserLat && currentUserLon) {
-    const filtered = window.lastFetchedCCTV?.filter(loc =>
+    const cctvFiltered = window.lastFetchedCCTV?.filter(loc =>
       getDistance(currentUserLat, currentUserLon, loc.lat, loc.lot) <= radius
     ) || [];
 
-    const heatmapPoints = filtered.map(loc => new naver.maps.LatLng(loc.lat, loc.lot));
+    const lampFiltered = window.lastFetchedStreetlamps?.filter(lamp =>
+      getDistance(currentUserLat, currentUserLon, lamp.lat, lamp.lng) <= radius
+    ) || [];
+
+    const heatmapPoints = [
+      ...cctvFiltered.map(loc => new naver.maps.LatLng(loc.lat, loc.lot)),
+      ...lampFiltered.map(lamp => new naver.maps.LatLng(lamp.lat, lamp.lng))
+    ];
 
     heatmapOverlay = new naver.maps.visualization.HeatMap({
       map: map,
@@ -49,6 +62,7 @@ function toggleHeatmap() {
 
   //console.log('🔥 히트맵 토글됨 →', heatmapVisible);
 }
+
 
 
 
@@ -89,6 +103,13 @@ function updateRadiusLabel() {
     searchStreetlampsByCurrentLocation(currentUserLat, currentUserLon);
     updateNearbyStreetlamps(currentUserLat, currentUserLon);
   }
+
+  if (heatmapVisible) {
+    // 히트맵 상태를 유지한 채 다시 생성
+    toggleHeatmap(); // 먼저 꺼주고
+    toggleHeatmap(); // 다시 켬 → 리렌더링 효과
+  }
+
 }
 
 
@@ -498,10 +519,22 @@ document.getElementById('searchBtn').addEventListener('click', () => {
       const data = await res.json();
       window.lastFetchedCCTV = data;
       updateNearbyFacilities(lat, lon);
+
+      // ✅ 검색 후 기본 상태 활성화
+      cctvVisible = true;
+      lampVisible = true;
+
+      markers.forEach(marker => marker.setMap(map));
+      lampMarkers.forEach(marker => marker.setMap(map));
+
+      heatmapVisible = false;  // 히트맵 강제 토글 유도
+      enableHeatmap();         // 이제 확실히 켜짐
     } catch (err) {
       console.error('❌ CCTV 검색 실패:', err);
       alert('CCTV 정보를 불러오지 못했습니다.');
     }
+
+
 
     // 가로등도 불러오기
     searchStreetlampsByCurrentLocation(lat, lon);
