@@ -7,6 +7,50 @@ let cctvVisible = true; // CCTV 마커 표시 여부
 let lampVisible = true; // 가로등 마커 표시 여부
 let heatmapVisible = false;
 
+function enableHeatmap() {
+  if (!heatmapVisible) {
+    toggleHeatmap();
+  }
+}
+
+
+function toggleHeatmap() {
+  heatmapVisible = !heatmapVisible;
+
+  const heatBtn = document.getElementById('btnHeat');
+  if (heatBtn) {
+    heatBtn.classList.remove('active', 'alt');
+    heatBtn.classList.add(heatmapVisible ? 'active' : 'alt');
+  }
+
+  if (heatmapOverlay) {
+    heatmapOverlay.setMap(null);
+    heatmapOverlay = null;
+  }
+
+  if (heatmapVisible && currentUserLat && currentUserLon) {
+    const cctvFiltered = window.lastFetchedCCTV?.filter(loc =>
+      getDistance(currentUserLat, currentUserLon, loc.lat, loc.lot) <= radius
+    ) || [];
+
+    const lampFiltered = window.lastFetchedStreetlamps?.filter(lamp =>
+      getDistance(currentUserLat, currentUserLon, lamp.lat, lamp.lng) <= radius
+    ) || [];
+
+    const heatmapPoints = [
+      ...cctvFiltered.map(loc => new naver.maps.LatLng(loc.lat, loc.lot)),
+      ...lampFiltered.map(lamp => new naver.maps.LatLng(lamp.lat, lamp.lng))
+    ];
+
+    heatmapOverlay = new naver.maps.visualization.HeatMap({
+      map: map,
+      radius: 30,
+      opacity: 0.6,
+      data: heatmapPoints
+    });
+  }
+}
+
 
 // 📌 거리 계산 함수 (Haversine)
 function getDistance(lat1, lon1, lat2, lon2) {
@@ -38,10 +82,12 @@ function updateRadiusLabel() {
 
     const activeTab = document.querySelector('.tab-btn.active')?.innerText;
     if (activeTab && activeTab.includes('히트맵')) {
-      heatmap.show(map, currentUserLat, currentUserLon, radius);
+      toggleHeatmap();  // 끄고
+      toggleHeatmap();  // 다시 켬
     } else {
       updateNearbyFacilities(currentUserLat, currentUserLon);
     }
+
   }
 }
 
@@ -78,16 +124,27 @@ function drawFacilityChart(data) {
   window.facilityChart = new Chart(ctx, {
     type: 'bar',
     data: {
-      labels: ['CCTV', '가로등'],
-      datasets: [{
-        label: '시설 개수',
-        data: [data.cctv, data.store, data.hospital, data.police],
-        backgroundColor: ['#2f80ed', '#10b981', '#f59e0b', '#ef4444']
-      }]
+      labels: ['시설'],
+      datasets: [
+        {
+          label: 'CCTV',
+          data: [data.cctv || 0],
+          backgroundColor: '#2f80ed'
+        },
+        {
+          label: '가로등',
+          data: [data.lamp || 0],
+          backgroundColor: '#10b981'
+        }
+      ]
     },
-    options: { responsive: false, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    options: {
+      responsive: false,
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+    }
   });
 }
+
 
 function drawSafetyDonut(score) {
   const ctx = document.getElementById('safetyDonut').getContext('2d');
@@ -199,34 +256,27 @@ function closeRiskAlert() {
   document.getElementById('riskAlertPopup').style.display = 'none';
 }
 
-function calculateSafetyScore({ cctv, lamp, accidentCount, policeDist }) {
+function calculateSafetyScore({ cctv = 0, lamp = 0, accidentCount = 0, policeDist = 0 }) {
   const cctvWeight = 0.3;
   const lampWeight = 0.2;
   const accidentWeight = -0.3;
   const policeWeight = 0.2;
 
-  // CCTV (최대 50개 기준)
   const cctvScore = Math.min(cctv / 50, 1) * 100;
-
-  // 가로등 (최대 100개 기준)
   const lampScore = Math.min(lamp / 100, 1) * 100;
-
-  // 사고 이력 (최대 10건 감점, 0건 = 100점)
   const accidentScore = Math.max(100 - accidentCount * 10, 0);
-
-  // 경찰서 거리 (1km 이내 = 100점, 3km 이상 = 0점 선형 감소)
   const policeScore = Math.max(0, 100 - (policeDist / 3000) * 100);
 
-  // 종합 점수 계산
   const finalScore = (
     cctvScore * cctvWeight +
     lampScore * lampWeight +
-    accidentScore * Math.abs(accidentWeight) + // 감점이므로 보정
+    accidentScore * Math.abs(accidentWeight) +
     policeScore * policeWeight
   );
 
   return Math.round(Math.min(finalScore, 100));
 }
+
 
 
 // 📌 시설 필터링 및 다시 그리기
@@ -284,10 +334,9 @@ function updateNearbyFacilities(lat, lon) {
 
   const facilityData = {
     cctv: filtered.length,
-    store: 0,
-    hospital: 0,
-    police: 0
+    lamp: lastFetchedStreetlamps?.filter(lamp => getDistance(lat, lon, lamp.lat, lamp.lng) <= radius).length || 0,
   };
+
 
   drawFacilityChart(facilityData);
   drawSafetyDonut(calculateSafetyScore(facilityData));
@@ -329,14 +378,18 @@ function searchByCurrentLocation() {
     });
 
     reverseGeocode(lat, lon, async (fullAddress, districtName) => {
-      if (!districtName) return //alert('구 이름을 찾을 수 없습니다.');
-      //document.getElementById('currentAddress').innerText = `📍 현위치 주소: ${fullAddress}`;
+      if (!districtName) return;
 
       try {
         const res = await fetch(`${API_BASE}/api/cctv?q=${encodeURIComponent(districtName)}`);
         const data = await res.json();
-        window.lastFetchedCCTV = data; // 저장
+        window.lastFetchedCCTV = data;
+
         updateNearbyFacilities(lat, lon);
+        searchStreetlampsByCurrentLocation(lat, lon);
+
+        // ✅ 데이터 로드 후 히트맵 표시
+        enableHeatmap();
       } catch (err) {
         console.error('❌ 오류:', err);
         alert(err.message || 'CCTV 검색 실패');
@@ -346,6 +399,7 @@ function searchByCurrentLocation() {
     alert('위치 권한이 필요합니다.');
   });
 }
+
 
 // ✅ 히트맵 객체 전역 선언
 let heatmapOverlay = null;
@@ -468,11 +522,13 @@ function updateNearbyStreetlamps(lat, lon) {
 
   // 차트 및 안전 점수 반영
   const facilityData = {
-    cctv: 0,
+    cctv: filtered.length,
+    lamp: lastFetchedStreetlamps?.filter(lamp => getDistance(lat, lon, lamp.lat, lamp.lng) <= radius).length || 0,
     store: 0,
     hospital: 0,
     police: 0
   };
+
   drawFacilityChart(facilityData);
   drawSafetyDonut(10); // 현재는 가로등에 대해 임의 점수 10점
 }
@@ -484,12 +540,15 @@ async function searchStreetlampsByCurrentLocation(lat, lon) {
     const res = await fetch(`${API_BASE}/api/streetlamps?lat=${lat}&lng=${lon}&radius=${radius}`);
     const data = await res.json();
     lastFetchedStreetlamps = data.lamps;
-    updateNearbyStreetlamps(lat, lon);
+
+    // 🔁 가로등 반영 후, CCTV와 함께 시설 차트 다시 그림
+    updateNearbyFacilities(lat, lon); // ✅ 여기서 다시 호출
   } catch (err) {
     console.error('❌ 가로등 검색 실패:', err);
     alert('가로등 데이터를 불러오지 못했습니다.');
   }
 }
+
 
 
 
@@ -503,7 +562,35 @@ window.onload = () => {
   const tabButtons = document.querySelectorAll('.tab-btn');
   const [heatBtn, lightBtn, cctvBtn] = tabButtons;
 
-  // ✅ 초기 스타일 세팅
+  // ✅ 지도 기능 초기화 (map 먼저 세팅해야 이후 함수 오류 안남)
+  initMap();
+  initTabSync(map);
+  updateRadiusLabel();
+
+  // ✅ 히트맵 버튼 스타일 및 클릭 연결
+  if (heatBtn) {
+    heatBtn.disabled = false;
+    heatBtn.style.cursor = 'pointer';
+    
+    // ✅ 항상 활성 상태로 시작
+    heatBtn.classList.add('active');
+    heatBtn.classList.remove('alt');
+
+    heatmapVisible = true; // ✅ 상태도 true로 미리 설정
+    heatBtn.addEventListener('click', toggleHeatmap);
+
+    if (heatmapVisible) {
+      heatBtn.classList.add('active');
+      heatBtn.classList.remove('alt');
+    } else {
+      heatBtn.classList.add('alt');
+      heatBtn.classList.remove('active');
+    }
+
+    heatBtn.addEventListener('click', toggleHeatmap);
+  }
+
+  // ✅ 아이콘 설정 토글에 따른 CCTV / 가로등 버튼 상태 세팅
   const setButtonState = (btns, isEnabled) => {
     btns.forEach(btn => {
       btn.disabled = !isEnabled;
@@ -511,39 +598,24 @@ window.onload = () => {
       btn.style.cursor = isEnabled ? 'pointer' : 'not-allowed';
     });
   };
-
-  // ✅ 아이콘 설정 토글에 따른 버튼 활성/비활성
   setButtonState([lightBtn, cctvBtn], iconToggle);
 
-  // ✅ 히트맵 버튼은 항상 가능 (예시)
-  heatBtn.disabled = false;
-  heatBtn.classList.remove('alt');
-  heatBtn.style.cursor = 'pointer';
-
-  // ✅ 버튼 클릭 시 색상 토글 (비활성 버튼은 무시)
+  // ✅ 탭 버튼 클릭 시 alt 토글
   tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!btn.disabled) {
-        btn.classList.toggle('alt'); // 색상 토글
+      if (!btn.disabled && btn !== heatBtn) {
+        btn.classList.toggle('alt');
       }
     });
-  }); 
+  });
 
-  
+  // ✅ 항상 현위치 기반 탐색 실행
+  searchByCurrentLocation();
 
-  // ✅ 지도 기능 초기화
-  initMap();
-  initTabSync(map);
-  updateRadiusLabel();
-
-  const isFirstLoad = localStorage.getItem('firstVisit') !== 'false';
-  if (isFirstLoad) {
-    searchByCurrentLocation(); // 최초 방문시에만 실행
-    localStorage.setItem('firstVisit', 'false');
-  }
-
+  // ✅ 반경 슬라이더 입력 이벤트 연결
   document.getElementById('radiusInput').addEventListener('input', updateRadiusLabel);
 };
+
 
 
 document.getElementById('radiusLabel').addEventListener('click', () => {

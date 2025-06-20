@@ -40,7 +40,7 @@
     </div>
 
     <div class="tabs">
-      <button class="tab-btn">히트맵</button>
+      <button class="tab-btn" id="btnHeat" onclick="toggleHeatmap()">히트맵</button>
       <button class="tab-btn" id="btnCCTV" onclick="toggleCCTVMarkers()">CCTV</button>
       <button class="tab-btn" id="btnLamp" onclick="toggleLampMarkers()">가로등</button>
     </div>
@@ -51,8 +51,8 @@
       <div class="side-panel">
         <div class="chart-box merged">
           <div class="chart-title-row">
-            <h4>📊 주변 시설 개수</h4>
-            <h4>🛡 안전 점수</h4>
+            <h4> 주변 시설 개수</h4>
+            <h4> 안전 점수</h4>
           </div>
           <div class="chart-canvas-row">
             <div class="chart-half">
@@ -86,47 +86,57 @@
   <!--script src="./heatmap.js"></script-->
   <script src="./script.js"></script>
 
-  <script>
-    let mapInstance;
-    let currentLat = null;
-    let currentLon = null;
-    let currentRadius = 100;
+<script>
+  let mapInstance;
+  let currentLat = null;
+  let currentLon = null;
+  let currentRadius = 100;
+  let hasFetchedLocation = false; // ✅ 최초 1회 위치 요청 제한용
 
-    function initTabSync(map) {
-      mapInstance = map;
+  function initTabSync(map) {
+    mapInstance = map;
 
-      document.querySelectorAll('.tab-btn').forEach((btn, index) => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-          btn.classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach((btn, index) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
 
-          currentRadius = document.getElementById('radiusInput').value;
+        currentRadius = document.getElementById('radiusInput').value;
 
-          if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition((position) => {
-              currentLat = position.coords.latitude;
-              currentLon = position.coords.longitude;
+        // ✅ 위치 재요청 방지
+        if (!hasFetchedLocation && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition((position) => {
+            currentLat = position.coords.latitude;
+            currentLon = position.coords.longitude;
+            hasFetchedLocation = true;
 
-              if (index === 1) {
-                searchStreetlampsByCurrentLocation(currentLat, currentLon);
-                document.querySelector('.list-box h3').innerText = "가로등 리스트";
-              } else if (index === 2) {
-                searchByCurrentLocation();
-                document.querySelector('.list-box h3').innerText = "CCTV 리스트";
-              }
-            });
-          } else {
-            alert("위치 정보를 가져올 수 없습니다.");
+            if (index === 1) {
+              searchStreetlampsByCurrentLocation(currentLat, currentLon);
+              document.querySelector('.list-box h3').innerText = "가로등 리스트";
+            } else if (index === 2) {
+              searchByCurrentLocation(); // CCTV
+              document.querySelector('.list-box h3').innerText = "CCTV 리스트";
+            }
+          });
+        } else {
+          if (index === 1) {
+            searchStreetlampsByCurrentLocation(currentLat, currentLon);
+            document.querySelector('.list-box h3').innerText = "가로등 리스트";
+          } else if (index === 2) {
+            searchByCurrentLocation();
+            document.querySelector('.list-box h3').innerText = "CCTV 리스트";
           }
-        });
+        }
       });
-    }
-
-    document.getElementById("radiusInput").addEventListener("input", function () {
-      document.getElementById("radiusLabel").textContent = this.value;
-      currentRadius = this.value;
     });
-  </script>
+  }
+
+  document.getElementById("radiusInput").addEventListener("input", function () {
+    document.getElementById("radiusLabel").textContent = this.value;
+    currentRadius = this.value;
+  });
+</script>
+
 </body>
 
 </html>
