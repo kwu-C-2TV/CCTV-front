@@ -46,7 +46,7 @@ const heatmap = (() => {
           position: new naver.maps.LatLng(item.lat, item.lot),
           map,
           icon: {
-            content: `<img src="/public/images/cctv.png" style="width:25px;height:25px;" />`,
+            content: `<img src="../public/images/cctv.png" style="width:25px;height:25px;" />`,
             anchor: new naver.maps.Point(12, 12)
           }
         });
